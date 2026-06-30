@@ -1,7 +1,11 @@
-arquivo TXT de exeplo
+arquivo TXT de exemplo
 
+# Você pode adicionar vídeos individuais:
 https://www.youtube.com/watch?v=ufRkhfoiPkc
 
 https://www.youtube.com/watch?v=RbvRVo4L_O8
 
 https://www.youtube.com/watch?v=cEvhPxb5vw0
+
+# Ou playlists completas (todos os vídeos serão baixados):
+# https://www.youtube.com/playlist?list=EXEMPLO_DE_PLAYLIST

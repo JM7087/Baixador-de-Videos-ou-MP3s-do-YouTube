@@ -11,16 +11,88 @@ def extrair_link_video(linha):
         return match.group(0)
     return None
 
+def is_playlist(url):
+    # Verifica se a URL é uma playlist do YouTube
+    return 'list=' in url or 'playlist' in url.lower()
+
+def download_playlist(playlist_url, pasta_para_salvar, ffmpeg_caminho, formato, progress_callback):
+    try:
+        # Primeiro, extrair informações da playlist
+        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
+            playlist_info = ydl.extract_info(playlist_url, download=False)
+            if 'entries' not in playlist_info:
+                QMessageBox.critical(None, "Erro", "URL de playlist inválida ou playlist vazia!")
+                return
+            
+            total_videos = len(playlist_info['entries'])
+            print(f'Playlist encontrada: {playlist_info.get("title", "Desconhecida")} com {total_videos} vídeos')
+        
+        # Configurar opções de download para playlist
+        if formato == 1:
+            ydl_opts = {
+                'outtmpl': f'{pasta_para_salvar}/%(playlist_index)s - %(title)s.%(ext)s',
+                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
+                'merge_output_format': 'mp4',
+                'ffmpeg_location': ffmpeg_caminho,
+                'extractor_args': {'youtube': {'player_client': ['android_vr', 'android']}},
+                'ignoreerrors': True,  # Continua mesmo se algum vídeo falhar
+            }
+        elif formato == 2:
+            ydl_opts = {
+                'outtmpl': f'{pasta_para_salvar}/%(playlist_index)s - %(title)s.%(ext)s',
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'ffmpeg_location': ffmpeg_caminho,
+                'extractor_args': {'youtube': {'player_client': ['android_vr', 'android']}},
+                'ignoreerrors': True,
+            }
+        else:
+            print(f'Formato inválido: {formato}')
+            return
+        
+        # Hook de progresso customizado para playlist
+        contador = [0]
+        def playlist_hook(d):
+            if d.get('status') == 'downloading':
+                # Tentar determinar qual vídeo está sendo baixado
+                filename = d.get('filename', '')
+                if filename:
+                    # Extrair índice do nome do arquivo se possível
+                    try:
+                        idx = int(filename.split('-')[0].split('/')[-1].split('\\')[-1].strip())
+                        contador[0] = idx
+                    except:
+                        pass
+                progress_callback(d, contador[0] if contador[0] > 0 else 1, total_videos)
+            elif d.get('status') == 'finished':
+                progress_callback({'status': 'finished'}, contador[0] if contador[0] > 0 else 1, total_videos)
+        
+        ydl_opts['progress_hooks'] = [playlist_hook]
+        
+        # Baixar toda a playlist
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([playlist_url])
+        
+        print(f'Download da playlist completo!')
+        QMessageBox.information(None, "Sucesso", f"Playlist baixada com sucesso! {total_videos} vídeos.")
+    except Exception as e:
+        QMessageBox.critical(None, "Erro", f"Erro ao baixar playlist: {e}")
+
 def download_video(video_url, pasta_para_salvar, contador_atual, total_videos, ffmpeg_caminho, formato, progress_callback):
     try:
         if formato == 1:
             # Opções para download de vídeo
             ydl_opts = {
                 'outtmpl': f'{pasta_para_salvar}/%(title)s.%(ext)s',
-                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
                 'merge_output_format': 'mp4',
                 'ffmpeg_location': ffmpeg_caminho,
                 'progress_hooks': [progress_callback],
+                'extractor_args': {'youtube': {'player_client': ['android_vr', 'android']}},
             }
         elif formato == 2:
             # Opções para download de áudio (MP3)
@@ -34,6 +106,7 @@ def download_video(video_url, pasta_para_salvar, contador_atual, total_videos, f
                 }],
                 'ffmpeg_location': ffmpeg_caminho,
                 'progress_hooks': [progress_callback],
+                'extractor_args': {'youtube': {'player_client': ['android_vr', 'android']}},
             }
         else:
             print(f'Formato inválido: {formato}')
@@ -88,15 +161,25 @@ class DownloadThread(QtCore.QThread):
 
     def run(self):
         if self.link:
-            download_video(
-                self.link,
-                self.pasta,
-                1,
-                1,
-                self.ffmpeg_caminho,
-                self.formato,
-                lambda d: self.progress_callback(d, 1, 1)
-            )
+            # Verificar se é uma playlist
+            if is_playlist(self.link):
+                download_playlist(
+                    self.link,
+                    self.pasta,
+                    self.ffmpeg_caminho,
+                    self.formato,
+                    lambda d, contador, total: self.progress_callback(d, contador, total)
+                )
+            else:
+                download_video(
+                    self.link,
+                    self.pasta,
+                    1,
+                    1,
+                    self.ffmpeg_caminho,
+                    self.formato,
+                    lambda d: self.progress_callback(d, 1, 1)
+                )
         else:
             download_videos_links_arquivo(
                 self.arquivo,
@@ -131,7 +214,7 @@ class VideoDownloaderApp(QtWidgets.QWidget):
 
         layout = QtWidgets.QGridLayout()
 
-        self.label_link = QtWidgets.QLabel('Link do vídeo:')
+        self.label_link = QtWidgets.QLabel('Link do vídeo/playlist:')
         layout.addWidget(self.label_link, 0, 0)
 
         self.texto_link = QtWidgets.QLineEdit(self)

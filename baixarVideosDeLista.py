@@ -8,14 +8,66 @@ def extrair_link_video(linha):
         return match.group(0)  # Retorna o link capturado
     return None  # Retorna None se não for um link de vídeo válido
 
+def is_playlist(url):
+    # Verifica se a URL é uma playlist do YouTube
+    return 'list=' in url or 'playlist' in url.lower()
+
+def download_playlist(playlist_url, pastaParaSalva, ffmpeg_caminho, formato):
+    try:
+        # Primeiro, extrair informações da playlist
+        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
+            playlist_info = ydl.extract_info(playlist_url, download=False)
+            if 'entries' not in playlist_info:
+                print("URL de playlist inválida ou playlist vazia!")
+                return
+            
+            total_videos = len(playlist_info['entries'])
+            print(f'Playlist encontrada: {playlist_info.get("title", "Desconhecida")} com {total_videos} vídeos')
+        
+        # Configurar opções de download para playlist
+        if formato == 1:
+            ydl_opts = {
+                'outtmpl': f'{pastaParaSalva}/%(playlist_index)s - %(title)s.%(ext)s',
+                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
+                'merge_output_format': 'mp4',
+                'ffmpeg_location': ffmpeg_caminho,
+                'extractor_args': {'youtube': {'player_client': ['android_vr', 'android']}},
+                'ignoreerrors': True,  # Continua mesmo se algum vídeo falhar
+            }
+        elif formato == 2:
+            ydl_opts = {
+                'outtmpl': f'{pastaParaSalva}/%(playlist_index)s - %(title)s.%(ext)s',
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'ffmpeg_location': ffmpeg_caminho,
+                'extractor_args': {'youtube': {'player_client': ['android_vr', 'android']}},
+                'ignoreerrors': True,
+            }
+        else:
+            print(f'Formato inválido: {formato}')
+            return
+        
+        # Baixar toda a playlist
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([playlist_url])
+        
+        print(f'Download da playlist completo! {total_videos} vídeos.')
+    except Exception as e:
+        print(f'Erro ao baixar playlist: {e}')
+
 def download_video(video_url, pastaParaSalva, contador_atual, total_videos, ffmpeg_caminho, formato):
     try:
         if formato == 1:  # Baixar vídeo
             ydl_opts = {
                 'outtmpl': f'{pastaParaSalva}/%(title)s.%(ext)s',
-                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',  # Formato alterado
+                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',  # Formato alterado
                 'merge_output_format': 'mp4',
                 'ffmpeg_location': ffmpeg_caminho,  # Define o caminho do FFmpeg
+                'extractor_args': {'youtube': {'player_client': ['android_vr', 'android']}},
             }
         elif formato == 2:  # Baixar MP3
             ydl_opts = {
@@ -27,6 +79,7 @@ def download_video(video_url, pastaParaSalva, contador_atual, total_videos, ffmp
                     'preferredquality': '192',
                 }],
                 'ffmpeg_location': ffmpeg_caminho,  # Define o caminho do FFmpeg
+                'extractor_args': {'youtube': {'player_client': ['android_vr', 'android']}},
             }
         else:
             print(f'Formato inválido: {formato}')
@@ -41,13 +94,23 @@ def download_video(video_url, pastaParaSalva, contador_atual, total_videos, ffmp
 def download_videos_links_arquivo(arquivoComLinksDosVideos, pastaParaSalva, ffmpeg_caminho, formato):
     with open(arquivoComLinksDosVideos, 'r', encoding='utf-8', errors='ignore') as file:
         video_urls = file.readlines()
-        links_validos = [extrair_link_video(linha) for linha in video_urls if extrair_link_video(linha)]
         
-        total_videos = len(links_validos)
-        print(f'Total de vídeos a serem baixados: {total_videos}')
-        
-        for contador, link in enumerate(links_validos, start=1):
-            download_video(link, pastaParaSalva, contador, total_videos, ffmpeg_caminho, formato)
+        # Processar cada linha
+        for linha in video_urls:
+            linha = linha.strip()
+            if not linha or linha.startswith('#'):  # Ignora linhas vazias e comentários
+                continue
+            
+            # Verificar se é uma playlist
+            if is_playlist(linha):
+                print(f'\nDetectada PLAYLIST: {linha}')
+                download_playlist(linha, pastaParaSalva, ffmpeg_caminho, formato)
+            else:
+                # Tentar extrair link de vídeo individual
+                link = extrair_link_video(linha)
+                if link:
+                    print(f'\nBaixando vídeo: {link}')
+                    download_video(link, pastaParaSalva, 1, 1, ffmpeg_caminho, formato)
 
 # Caminho do arquivo de texto contendo os links dos vídeos
 arquivoComLinksDosVideos = 'linkesDeVideos.txt'
