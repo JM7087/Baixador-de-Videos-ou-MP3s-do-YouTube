@@ -1,3 +1,32 @@
+INSTRUÇÕES PARA BAIXAR O FFMPEG
+================================
+
+Os arquivos executáveis do FFmpeg (.exe) NÃO estão incluídos neste repositório 
+devido ao limite de tamanho de arquivos do GitHub (cada um tem ~141MB).
+
+COMO INSTALAR:
+--------------
+
+1. Baixe o FFmpeg Windows build em: https://www.gyan.dev/ffmpeg/builds/
+
+2. Recomendado: "ffmpeg-release-full.7z" (versão completa)
+
+3. Extraia os arquivos e copie APENAS os 3 arquivos .exe para esta pasta:
+   - ffmpeg.exe
+   - ffplay.exe  
+   - ffprobe.exe
+
+4. A estrutura final deve ser:
+   botDeBaixarVideosDoYouTubePython/
+   └── ffmpeg/
+       └── bin/
+           ├── ffmpeg.exe
+           ├── ffplay.exe
+           └── ffprobe.exe
+
+INFORMAÇÕES DA VERSÃO ATUAL:
+----------------------------
+
 FFmpeg 64-bit static Windows build from www.gyan.dev
 
 Version: 2024-11-28-git-bc991ca048-full_build-www.gyan.dev
